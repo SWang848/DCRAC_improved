@@ -123,7 +123,7 @@ agent = deep_agent(minecart,
 steps_per_weight = 50000 if options.mode == "sparse" else 1
 
 # log_file_name = 'output/logs/{}_dst{}_rewards_{}.log'.format(timestamp, options.dst_view, hyper_info)
-log_file_name = 'output/logs/rewards_P_4-regular'
+log_file_name = 'output/logs/rewards_P_1-regular'
 with open(log_file_name, 'w', 1) as log_file:
     agent.train(log_file, options.steps, all_weights, steps_per_weight, options.steps*10, log_game_step=options.log_game)
 

@@ -1,1 +1,1 @@
-python main_mine.py --seed 0 --agent DCRAC --replay DER --buffer-size 50000 --memnn-size 4 --timesteps 4 --lr-c 0.0003 --lr-a 0.0003 --update-period 2 --batch-size 32 --discount 0.99 --mode sparse --gpu 1 
+python main_mine.py --seed 0 --agent DCRAC --replay DER --buffer-size 50000 --memnn-size 4 --timesteps 4 --lr-c 0.0003 --lr-a 0.0003 --update-period 2 --batch-size 32 --discount 0.99 --mode regular --gpu 1 
