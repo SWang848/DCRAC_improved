@@ -122,6 +122,10 @@ class DCRACAgent:
         self.extra = extra
         self.gpu_setting = gpu_setting
 
+        self.start_lambda = 3
+        self.end_lambda = 1
+        self.alpha = 1
+
         # Tensorflow GPU optimization.
         config = tf.compat.v1.ConfigProto()
         config.gpu_options.allow_growth = True
@@ -185,9 +189,8 @@ class DCRACAgent:
         episode_steps = 0
         pred_idx = None
 
-        current_state_raw = self.env.reset()
-        current_state, last_action = self.history.reset_with_raw_frame(current_state_raw, fill=self.fill_history)
-
+        self.current_state_raw = self.env.reset()
+        self.current_state, last_action = self.history.reset_with_raw_frame(self.pixel_env.observation(self.current_state_raw), fill=self.fill_history)
 
         for i in range(int(self.total_steps)):
 
@@ -195,7 +198,7 @@ class DCRACAgent:
             episode_steps += 1
 
             # pick an action following an epsilon-greedy strategy
-            action, acts_prob = self.pick_action(current_state, last_action)
+            action, acts_prob = self.pick_action(self.current_state, last_action)
 
             # perform the action
             next_state_raw, reward, terminal, info = self.env.step(action, self.frame_skip)
@@ -206,7 +209,8 @@ class DCRACAgent:
 
             # memorize the experienced transition
             pred_idx = self.memorize(
-                current_state,
+                self.current_state,
+                self.current_state_raw,
                 action, 
                 reward,
                 next_state,
@@ -225,13 +229,13 @@ class DCRACAgent:
                               self.weights, self.discount, episode_steps,
                               self.epsilon, self.frame_skip, action)
 
-            current_state = next_state
-            current_state_raw = next_state_raw
+            self.current_state = next_state
+            self.current_state_raw = next_state_raw
             last_action = next_last_action
             
             if terminal or episode_steps > self.max_episode_length:
-                current_state_raw = self.env.reset()
-                current_state, last_action = self.history.reset_with_raw_frame(current_state_raw, fill=self.fill_history)
+                self.current_state_raw = self.env.reset()
+                self.current_state, last_action = self.history.reset_with_raw_frame(self.current_state_raw, fill=self.fill_history)
                 pred_idx = None
 
                 is_weight_change = int(
@@ -252,50 +256,50 @@ class DCRACAgent:
                 # self.save_weights()
                 self.save_model()
 
-    def test(self, weights, log_file, stoch_policy=None, log_game_step=False):
-        episodes = 0
-        self.steps = 0
-        if stoch_policy is not None:
-            self.stoch_policy = stoch_policy
-        repeat = 10 if self.stoch_policy else 1
+    # def test(self, weights, log_file, stoch_policy=None, log_game_step=False):
+    #     episodes = 0
+    #     self.steps = 0
+    #     if stoch_policy is not None:
+    #         self.stoch_policy = stoch_policy
+    #     repeat = 10 if self.stoch_policy else 1
 
-        self.log = Log(log_file)
+    #     self.log = Log(log_file)
 
-        for w in weights:
-            for _ in range(repeat):
-                episode_steps = 0
-                current_state_raw = self.env.reset()
-                current_state, last_action = self.history.reset_with_raw_frame(current_state_raw, fill=self.fill_history)
+    #     for w in weights:
+    #         for _ in range(repeat):
+    #             episode_steps = 0
+    #             self.current_state_raw = self.env.reset()
+    #             self.current_state, last_action = self.history.reset_with_raw_frame(current_state_raw, fill=self.fill_history)
 
-                while episode_steps < self.max_episode_length:
-                    # pick an action following an epsilon-greedy strategy
-                    action, acts_prob = self.pick_action(current_state, last_action, weights=w, egreedy=False)
+    #             while episode_steps < self.max_episode_length:
+    #                 # pick an action following an epsilon-greedy strategy
+    #                 action, acts_prob = self.pick_action(current_state, last_action, weights=w, egreedy=False)
 
-                    # perform the action
-                    next_state_raw, reward, terminal, info = self.env.step(action, self.frame_skip)
-                    next_state, next_last_action = self.history.add_raw_frame(next_state_raw, action)
+    #                 # perform the action
+    #                 next_state_raw, reward, terminal, info = self.env.step(action, self.frame_skip)
+    #                 next_state, next_last_action = self.history.add_raw_frame(next_state_raw, action)
 
-                    self.steps += 1
-                    episode_steps += 1
+    #                 self.steps += 1
+    #                 episode_steps += 1
 
-                    if log_game_step:
-                        print("Taking action", action, "under prob", acts_prob, "at", info["position"], "with reward", reward)
+    #                 if log_game_step:
+    #                     print("Taking action", action, "under prob", acts_prob, "at", info["position"], "with reward", reward)
 
-                    self.log.log_step(episodes, self.steps, 0, reward,
-                                    terminal or episode_steps > self.max_episode_length, 
-                                    w, self.discount, episode_steps,
-                                    0, self.frame_skip, action)
+    #                 self.log.log_step(episodes, self.steps, 0, reward,
+    #                                 terminal or episode_steps > self.max_episode_length, 
+    #                                 w, self.discount, episode_steps,
+    #                                 0, self.frame_skip, action)
                     
-                    if terminal:
-                        break
+    #                 if terminal:
+    #                     break
                     
-                    current_state = next_state
-                    current_state_raw = next_state_raw
-                    last_action = next_last_action
+    #                 current_state = next_state
+    #                 current_state_raw = next_state_raw
+    #                 last_action = next_last_action
                     
-                episodes += 1
+    #             episodes += 1
 
-        return len(weights)*repeat
+    #     return len(weights)*repeat
 
                 
 
