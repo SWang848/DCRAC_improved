@@ -600,7 +600,16 @@ class DCRACAgent:
 
         self.epsilon = linear_anneal(steps, annealing_steps, self.start_e, self.end_e, start_steps)
 
+    def update_lambda(self, steps):
+        start_steps = self.learning_steps * self.start_annealing
+        annealing_steps = self.total_steps * self.alpha
 
+        self.k = self.linear_anneal_lambda(steps, annealing_steps, self.start_lambda, self.end_lambda, start_steps)
+
+    def linear_anneal_lambda(self, steps, annealing_steps, start_lambda, end_lambda, start_steps):
+        t = max(0, steps - start_steps)
+        return max(end_lambda, (annealing_steps-t) * (start_lambda - end_lambda) / annealing_steps + end_lambda)
+        
     def initialize_memory(self):
         """Initialize the replay buffer, with a secondary diverse buffer and/or
             a secondary tree to store prediction errors
