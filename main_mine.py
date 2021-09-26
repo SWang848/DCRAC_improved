@@ -83,7 +83,7 @@ np.random.seed(options.seed)
 json_file = "mine_config_det.json"
 minecart = Minecart.from_json(json_file)
 # minecart = gym.wrappers.TimeLimit(minecart, 1000)
-# pixel_minecart = PixelMinecart(minecart)
+pixel_minecart = PixelMinecart(minecart)
 obj_cnt = minecart.obj_cnt
 
 all_weights = list(np.loadtxt("regular_weights_mine"))
@@ -92,7 +92,7 @@ all_weights = list(np.loadtxt("regular_weights_mine"))
 timestamp = time.strftime("%m%d_%H%M", time.localtime())
 deep_agent = AGENT_DICT[options.agent]
 agent = deep_agent(minecart, 
-                   # pixel_minecart,
+                   pixel_minecart,
                    gamma=options.discount,
                    weights=None,
                    timesteps=options.timesteps,
