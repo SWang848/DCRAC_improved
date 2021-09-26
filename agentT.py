@@ -416,7 +416,7 @@ class DCRACAgent:
         q_mask = np.zeros((cur_batch_size, self.nb_action, self.qvalue_dim), dtype=float)
         action_objective = np.zeros((cur_batch_size, self.nb_action), dtype=float)
         
-        for i, (_, action, reward, _, done, _, _) in enumerate(batch):
+        for i, (_, action, reward, _, done, _, _, _) in enumerate(batch):
             q_true[i][action] = np.copy(reward)
             q_mask[i][action] = 1
 
@@ -542,7 +542,7 @@ class DCRACAgent:
 
         errors = np.zeros(len(batch))
 
-        for i, (_, action, reward, _, terminal, _, _) in enumerate(batch):
+        for i, (_, action, reward, _, terminal, _, _, _) in enumerate(batch):
             
             target = np.copy(reward)
 
@@ -609,7 +609,7 @@ class DCRACAgent:
     def linear_anneal_lambda(self, steps, annealing_steps, start_lambda, end_lambda, start_steps):
         t = max(0, steps - start_steps)
         return max(end_lambda, (annealing_steps-t) * (start_lambda - end_lambda) / annealing_steps + end_lambda)
-        
+
     def initialize_memory(self):
         """Initialize the replay buffer, with a secondary diverse buffer and/or
             a secondary tree to store prediction errors
