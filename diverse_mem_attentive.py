@@ -631,10 +631,11 @@ class AttentiveMemoryBuffer(PrioritizedDiverseMemory):
         PrioritizedDiverseMemory.__init__(self, main_capacity, sec_capacity, trace_diversity, crowding_diversity, value_function, e, a)
 
     def cal_weights_similarity(self, a, b):
+        
         dist = np.linalg.norm(a-b)
+        # return dist
+        return 1 / (1 + dist)
 
-        return dist
-    
     def cal_states_similarity(self, state):
         seed = 0
         input_t = tf.convert_to_tensor(state, dtype=np.float32)
@@ -651,26 +652,30 @@ class AttentiveMemoryBuffer(PrioritizedDiverseMemory):
 
         dist = np.linalg.norm(state[0, :]-state[1, :])
         
-        # print(dist)
-        return dist
+        # return dist
+        return 1 / (1 + dist)
+    
+    def cal_properties_similarities(self, properties_1, properties_2, function='cosine'):
+        if function == 'euclidean':
+            for i in [properties_1, properties_2]:
+                i[3] = i[3] / 360
+                i[4] = i[4] / 1.5
+                i[5] = i[5] / 1.5
+            dist = np.linalg.norm(properties_1-properties_2)
+            return 1 / (1 + dist)
 
-    def sample(self, n, k, steps, current_weights, current_state, tree_id=None):
-        """Sample n transitions from the replay buffer, following the priorities
-        of the tree identified by tree_id
-
-        Arguments:
-            n {int} -- Number of transitios to sample
-            k {int} -- Sample k * n number of transitons, k will anneal from K to 1
-
-        Keyword Arguments:
-            tree_id {object} -- identifier of the tree whose priorities should be followed (default: {None})
-
-        Returns:
-            tuple -- pair of (indices, transitions)
-        """
+        elif function == 'cosine':
+            zero_array = np.array([0] * len(properties_1))
+            if (properties_1 == zero_array).all() or (properties_2 == zero_array).all():
+                return float(1) if (properties_2 == properties_1).all() else float(0)
+            res = np.array([[properties_1[i] * properties_2[i], properties_1[i] * properties_1[i], properties_2[i] * properties_2[i]] for i in range(len(properties_1))])
+            cos = sum(res[:, 0]) / (np.sqrt(sum(res[:, 1])) * np.sqrt(sum(res[:, 2])))
+            return 0.5 * cos + 0.5 
+            
+    def sample(self, n, k, steps, current_weights, current_state, properties, mode='properties', tree_id=None):
         if n<1:
             return None, None, None
-
+        
         if steps <= 100000:
             k = 1
         else:
@@ -694,17 +699,27 @@ class AttentiveMemoryBuffer(PrioritizedDiverseMemory):
                 (idx, p, data) = self.tree.get(s, tree_id)
 
             if steps > 100000:
-                state = np.concatenate((np.expand_dims(data[1][0], axis=0), 
+                if mode == 'properties':
+                    properties_1 = data[1][7][1]
+                    properties_2 = properties
+                    sim_score = self.cal_properties_similarities(np.copy(properties_1), np.copy(properties_2)) \
+                                + self.cal_weights_similarity(current_weights, data[1][7][0])
+                elif mode == 'state':
+                    state = np.concatenate((np.expand_dims(data[1][0], axis=0), 
                                             np.expand_dims(current_state, axis=0)))
-                sim_score = self.cal_weights_similarity(current_weights, data[1][5][3]) + self.cal_states_similarity(state)
-                score[i] = (idx, sim_score, data, p) #data[1][5][3] means the weights used in this transition
+                    sim_score = self.cal_weights_similarity(current_weights, data[1][7][0]) \
+                                + self.cal_states_similarity(state)
+                else:
+                    pass    
+                score[i] = (idx, sim_score, data, p)
+
             else:
                 ids[i] = idx
                 batch[i] = data[1]
                 priorities[i] = p
 
         if steps > 100000:
-            score = sorted(score.items(), key=lambda item: item[1][1], reverse=False)
+            score = sorted(score.items(), key=lambda item: item[1][1], reverse=True)
             for i in range(n):
                 ids[i] = score[i][1][0]
                 batch[i] = score[i][1][2][1]
