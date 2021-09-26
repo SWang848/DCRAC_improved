@@ -117,7 +117,7 @@ agent = deep_agent(minecart,
                    tau=0.9,
                    clipnorm=80,
                    clipvalue=0, # 0 means no clip value
-                   im_size=(6,),
+                #    im_size=(6,),s
                    extra='{}_{}'.format(timestamp, hyper_info),
                    gpu_setting=options.gpu_setting)
 
