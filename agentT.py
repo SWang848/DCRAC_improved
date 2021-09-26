@@ -11,7 +11,7 @@ from collections import deque
 from networks import Actor, Critic, Critic0, ActorCritic, ActorCriticER
 # NN configs.
 from config_agent import IM_SIZE, BLACK_AND_WHITE
-from diverse_mem import DiverseMemory
+from diverse_mem_attentive import AttentiveMemoryBuffer, MemoryBuffer
 from history import History
 from utils import *
 
@@ -192,7 +192,8 @@ class DCRACAgent:
         pred_idx = None
 
         self.current_state_raw = self.env.reset()
-        self.current_state, last_action = self.history.reset_with_raw_frame(self.pixel_env.observation(self.current_state_raw), fill=self.fill_history)
+        # self.current_state, last_action = self.history.reset_with_raw_frame(self.pixel_env.observation(self.current_state_raw), fill=self.fill_history)
+        self.current_state, last_action = self.history.reset_with_raw_frame(self.current_state_raw, fill=self.fill_history)
 
         for i in range(int(self.total_steps)):
 
@@ -204,7 +205,8 @@ class DCRACAgent:
 
             # perform the action
             next_state_raw, reward, terminal, info = self.env.step(action, self.frame_skip)
-            next_state, next_last_action = self.history.add_raw_frame(self.pixel_env.observation(next_state_raw), action)
+            # next_state, next_last_action = self.history.add_raw_frame(self.pixel_env.observation(next_state_raw), action)
+            next_state, next_last_action = self.history.add_raw_frame(next_state_raw, action)
 
             if self.log_game_step:
                 print("Taking action", action, "under prob", acts_prob, "at", info["position"], "with reward", reward)
@@ -223,6 +225,7 @@ class DCRACAgent:
                 pred_idx=pred_idx)
 
             # update the networks and exploration rate
+            self.update_lambda(i)
             loss = self.perform_updates(i)
             self.update_epsilon(i)
 
@@ -237,7 +240,8 @@ class DCRACAgent:
             
             if terminal or episode_steps > self.max_episode_length:
                 self.current_state_raw = self.env.reset()
-                self.current_state, last_action = self.history.reset_with_raw_frame(self.pixel_env.observation(self.current_state_raw), fill=self.fill_history)
+                # self.current_state, last_action = self.history.reset_with_raw_frame(self.pixel_env.observation(self.current_state_raw), fill=self.fill_history)
+                self.current_state, last_action = self.history.reset_with_raw_frame(self.current_state_raw, fill=self.fill_history)
                 pred_idx = None
 
                 is_weight_change = int(
@@ -389,7 +393,8 @@ class DCRACAgent:
 
     def policy_update(self, update_actor=True):
         np.random.seed(self.steps)
-        ids, batch, _ = self.buffer.sample(self.batch_size)
+        # ids, batch, _ = self.buffer.sample(self.batch_size)
+        ids, batch, _ = self.buffer.sample(self.batch_size, self.k, self.steps, self.weights, self.current_state, self.current_state_raw, mode='properties')
 
         if self.direct_update:
             # Add recent experiences to the priority update batch
@@ -628,7 +633,10 @@ class DCRACAgent:
             self.trace_values[trace_id] = value
             return value
 
-        self.buffer = DiverseMemory(main_capacity=main_capacity, sec_capacity=sec_capacity,
+        # self.buffer = MemoryBuffer(main_capacity=main_capacity, sec_capacity=sec_capacity,
+        #     value_function=der_trace_value, trace_diversity=True, a=self.buffer_a, e=self.buffer_e)
+
+        self.buffer = AttentiveMemoryBuffer(main_capacity=main_capacity, sec_capacity=sec_capacity,
             value_function=der_trace_value, trace_diversity=True, a=self.buffer_a, e=self.buffer_e)
 
     def memorize(self, state, properties, action, reward, next_state, terminal, action_prev, acts_prob, 
@@ -654,7 +662,8 @@ class DCRACAgent:
         if initial_error == 0 and not self.direct_update:
             initial_error = self.max_error
 
-        transition = np.array((state, action, reward, next_state[-1], terminal, action_prev, acts_prob))
+        extra = np.array([self.weights, properties])
+        transition = np.array((state, action, reward, next_state[-1], terminal, action_prev, acts_prob, extra))
 
         # Add transition to replay buffer
         idx = self.buffer.add(initial_error, transition, pred_idx=pred_idx, trace_id=trace_id)
