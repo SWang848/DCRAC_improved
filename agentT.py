@@ -19,6 +19,7 @@ from utils import *
 class DCRACAgent:
     def __init__(self,
                  env,
+                 pixel_env,
                  gamma=0.98,
                  weights=None,
                  timesteps=5,
@@ -54,6 +55,7 @@ class DCRACAgent:
                  gpu_setting='1'):
         
         self.env = env
+        self.pixel_env = pixel_env
         self.nb_action = self.env.action_space.n # .shape[0]
         self.observation_shape = self.env.observation_space.shape
         self.nb_objective = self.env.obj_cnt
@@ -202,7 +204,7 @@ class DCRACAgent:
 
             # perform the action
             next_state_raw, reward, terminal, info = self.env.step(action, self.frame_skip)
-            next_state, next_last_action = self.history.add_raw_frame(next_state_raw, action)
+            next_state, next_last_action = self.history.add_raw_frame(self.pixel_env.observation(next_state_raw), action)
 
             if self.log_game_step:
                 print("Taking action", action, "under prob", acts_prob, "at", info["position"], "with reward", reward)
@@ -235,7 +237,7 @@ class DCRACAgent:
             
             if terminal or episode_steps > self.max_episode_length:
                 self.current_state_raw = self.env.reset()
-                self.current_state, last_action = self.history.reset_with_raw_frame(self.current_state_raw, fill=self.fill_history)
+                self.current_state, last_action = self.history.reset_with_raw_frame(self.pixel_env.observation(self.current_state_raw), fill=self.fill_history)
                 pred_idx = None
 
                 is_weight_change = int(
@@ -629,7 +631,7 @@ class DCRACAgent:
         self.buffer = DiverseMemory(main_capacity=main_capacity, sec_capacity=sec_capacity,
             value_function=der_trace_value, trace_diversity=True, a=self.buffer_a, e=self.buffer_e)
 
-    def memorize(self, state, action, reward, next_state, terminal, action_prev, acts_prob, 
+    def memorize(self, state, properties, action, reward, next_state, terminal, action_prev, acts_prob, 
         initial_error=0, trace_id=None, pred_idx=None):
         """Memorizes a transition into the replay, if no error is provided, the 
         transition is saved with the lowest priority possible, and should be
