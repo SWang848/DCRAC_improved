@@ -117,14 +117,14 @@ agent = deep_agent(minecart,
                    tau=0.9,
                    clipnorm=80,
                    clipvalue=0, # 0 means no clip value
-                   im_size=(6,),
+                #    im_size=(6,),
                    extra='{}_{}'.format(timestamp, hyper_info),
                    gpu_setting=options.gpu_setting)
 
 steps_per_weight = 50000 if options.mode == "sparse" else 1
 
 # log_file_name = 'output/logs/{}_dst{}_rewards_{}.log'.format(timestamp, options.dst_view, hyper_info)
-log_file_name = 'output/logs/rewards_AP_1-regular'
+log_file_name = 'output/logs/rewards_AP_2-regular'
 with open(log_file_name, 'w', 1) as log_file:
     agent.train(log_file, options.steps, all_weights, steps_per_weight, options.steps*10, log_game_step=options.log_game)
 

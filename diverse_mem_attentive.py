@@ -633,8 +633,8 @@ class AttentiveMemoryBuffer(PrioritizedDiverseMemory):
     def cal_weights_similarity(self, a, b):
         
         dist = np.linalg.norm(a-b)
-        # return dist
-        return 1 / (1 + dist)
+        return dist
+        # return 1 / (1 + dist)
 
     def cal_states_similarity(self, state):
         seed = 0
@@ -652,8 +652,8 @@ class AttentiveMemoryBuffer(PrioritizedDiverseMemory):
 
         dist = np.linalg.norm(state[0, :]-state[1, :])
         
-        # return dist
-        return 1 / (1 + dist)
+        return dist
+        # return 1 / (1 + dist)
     
     def cal_properties_similarities(self, properties_1, properties_2, function='cosine'):
         if function == 'euclidean':
@@ -672,10 +672,78 @@ class AttentiveMemoryBuffer(PrioritizedDiverseMemory):
             cos = sum(res[:, 0]) / (np.sqrt(sum(res[:, 1])) * np.sqrt(sum(res[:, 2])))
             return 0.5 * cos + 0.5 
             
-    def sample(self, n, k, steps, current_weights, current_state, properties, mode='properties', tree_id=None):
+    # def sample(self, n, k, steps, current_weights, current_state, properties, mode='properties', tree_id=None):
+    #     if n<1:
+    #         return None, None, None
+        
+    #     if steps <= 100000:
+    #         k = 1
+    #     else:
+    #         pass
+
+    #     batch = np.zeros((n, ), dtype=np.ndarray)
+    #     ids = np.zeros(n, dtype=int)
+    #     priorities = np.zeros(n, dtype=float)
+    #     segment = self.tree.total(tree_id) / int(round(n*k))
+    #     score = dict()
+        
+    #     for i in range(int(round(n*k))):
+    #         a = segment * i
+    #         b = segment * (i + 1)
+            
+    #         s = np.random.uniform(a, b)
+    #         (idx, p, data) = self.tree.get(s, tree_id)
+    #         while (data[1]) is None or (
+    #                 idx - self.capacity + 1 >= self.capacity):
+    #             s = np.random.uniform(0, self.tree.total(tree_id))
+    #             (idx, p, data) = self.tree.get(s, tree_id)
+
+    #         if steps > 100000:
+    #             if mode == 'properties':
+    #                 properties_1 = data[1][7][1]
+    #                 properties_2 = properties
+    #                 sim_score = self.cal_properties_similarities(np.copy(properties_1), np.copy(properties_2)) \
+    #                             + self.cal_weights_similarity(current_weights, data[1][7][0])
+    #             elif mode == 'state':
+    #                 state = np.concatenate((np.expand_dims(data[1][0], axis=0), 
+    #                                         np.expand_dims(current_state, axis=0)))
+    #                 sim_score = self.cal_weights_similarity(current_weights, data[1][7][0]) \
+    #                             + self.cal_states_similarity(state)
+    #             else:
+    #                 pass    
+    #             score[i] = (idx, sim_score, data, p)
+
+    #         else:
+    #             ids[i] = idx
+    #             batch[i] = data[1]
+    #             priorities[i] = p
+
+    #     if steps > 100000:
+    #         score = sorted(score.items(), key=lambda item: item[1][1], reverse=True)
+    #         for i in range(n):
+    #             ids[i] = score[i][1][0]
+    #             batch[i] = score[i][1][2][1]
+    #             priorities[i] = score[i][1][3]
+
+    #     return ids, batch, priorities
+
+    def sample(self, n, k, steps, current_weights, current_state, tree_id=None):
+        """Sample n transitions from the replay buffer, following the priorities
+        of the tree identified by tree_id
+
+        Arguments:
+            n {int} -- Number of transitios to sample
+            k {int} -- Sample k * n number of transitons, k will anneal from K to 1
+
+        Keyword Arguments:
+            tree_id {object} -- identifier of the tree whose priorities should be followed (default: {None})
+
+        Returns:
+            tuple -- pair of (indices, transitions)
+        """
         if n<1:
             return None, None, None
-        
+
         if steps <= 100000:
             k = 1
         else:
@@ -699,324 +767,20 @@ class AttentiveMemoryBuffer(PrioritizedDiverseMemory):
                 (idx, p, data) = self.tree.get(s, tree_id)
 
             if steps > 100000:
-                if mode == 'properties':
-                    properties_1 = data[1][7][1]
-                    properties_2 = properties
-                    sim_score = self.cal_properties_similarities(np.copy(properties_1), np.copy(properties_2)) \
-                                + self.cal_weights_similarity(current_weights, data[1][7][0])
-                elif mode == 'state':
-                    state = np.concatenate((np.expand_dims(data[1][0], axis=0), 
+                state = np.concatenate((np.expand_dims(data[1][0], axis=0), 
                                             np.expand_dims(current_state, axis=0)))
-                    sim_score = self.cal_weights_similarity(current_weights, data[1][7][0]) \
-                                + self.cal_states_similarity(state)
-                else:
-                    pass    
-                score[i] = (idx, sim_score, data, p)
-
+                sim_score = self.cal_weights_similarity(current_weights, data[1][7][0]) + self.cal_states_similarity(state)
+                score[i] = (idx, sim_score, data, p) #data[1][5][3] means the weights used in this transition
             else:
                 ids[i] = idx
                 batch[i] = data[1]
                 priorities[i] = p
 
         if steps > 100000:
-            score = sorted(score.items(), key=lambda item: item[1][1], reverse=True)
+            score = sorted(score.items(), key=lambda item: item[1][1], reverse=False)
             for i in range(n):
                 ids[i] = score[i][1][0]
                 batch[i] = score[i][1][2][1]
                 priorities[i] = score[i][1][3]
 
         return ids, batch, priorities
-
-    # def sample(self, n, k, current_weights, tree_id=None):
-    #     """Sample n transitions from the replay buffer, following the priorities
-    #     of the tree identified by tree_id
-
-    #     Arguments:
-    #         n {int} -- Number of transitios to sample
-    #         k {int} -- Sample k * n number of transitons, k will anneal from K to 1
-
-    #     Keyword Arguments:
-    #         tree_id {object} -- identifier of the tree whose priorities should be followed (default: {None})
-
-    #     Returns:
-    #         tuple -- pair of (indices, transitions)
-    #     """
-    #     if n<1:
-    #         return None, None, None
-
-    #     batch = np.zeros((n, ), dtype=np.ndarray)
-    #     ids = np.zeros(n, dtype=int)
-    #     priorities = np.zeros(n, dtype=float)
-    #     segment = self.tree.total(tree_id) / n
-    #     score = dict()
-
-    #     for i in range(int(round(n*k))):
-    #         a = segment * i
-    #         b = segment * (i + 1)
-
-    #         s = np.random.uniform(a, b)
-    #         (idx, p, data) = self.tree.get(s, tree_id)
-    #         while (data[1]) is None or (
-    #                 idx - self.capacity + 1 >= self.capacity):
-    #             s = np.random.uniform(0, self.tree.total(tree_id))
-    #             (idx, p, data) = self.tree.get(s, tree_id)
-            
-    #         score[i] = (idx, self.cal_similarity(current_weights, data[1][5][3]), data, p) #data[1][5][3] means the weights used in this transition
-        
-    #     score = sorted(score.items(), key=lambda item: item[1][1], reverse=False)
-    #     for i in range(n):
-    #         ids[i] = score[i][1][0]
-    #         batch[i] = score[i][1][2][1]
-    #         priorities[i] = score[i][1][3]
-        
-    #     return ids, batch, priorities
-
-class DiverseMemoryWithAER():
-
-    def __init__(self,
-            main_capacity,
-            sec_capacity,
-            trace_diversity=True,
-            crowding_diversity=True,
-            value_function=lambda trace, trace_id, memory_indices: np.random.random(1)
-            ):
-
-        self.len = 0
-        self.trace_diversity = trace_diversity
-        self.value_function = value_function
-        self.capacity = main_capacity + sec_capacity
-        self.buffer = QueueBuffer(self.capacity)
-        self.crowding_diversity = crowding_diversity
-        self.main_capacity = main_capacity
-        self.sec_capacity = sec_capacity
-        self.secondary_traces = []
-    
-    def sample_attentive(self, n, k, current_state):
-        if n < 1:
-            return None, None, None
-
-        batch = np.zeros((n, ), dtype=np.ndarray)
-        ids = np.zeros(n, dtype=int)
-        score = dict()
-        for i in range(int(round(n*k))):
-            id = np.random.randint(0, self.capacity)
-            while self.buffer.data[id][1] is None:
-                id = np.random.randint(0, self.capacity)
-            state = np.concatenate((np.expand_dims(self.buffer.data[id][1][0], axis=0), 
-                                        np.expand_dims(current_state, axis=0)))
-            score[id] = self.cal_similarity(state)
-
-        score = sorted(score.items(), key=lambda item: item[1], reverse=False)
-        for i in range(n):
-            ids[i] = score[i][0]
-            batch[i] = self.buffer.data[ids[i]][1]
-            priorities = None
-        return ids, batch, priorities
-
-    def cal_similarity(self, state):
-
-        input_t = tf.convert_to_tensor(state, dtype=np.float32)
-        x = Lambda(lambda x: x / 255., name="input_normalizer")(input_t)
-
-        x = TimeDistributed(Conv2D(filters=32, kernel_size=6, strides=2, 
-                                    activation='relu', kernel_initializer='glorot_uniform',
-                                    input_shape=x.shape))(x)
-        x = TimeDistributed(MaxPool2D())(x)
-
-        x = TimeDistributed(Conv2D(filters=48, kernel_size=5, strides=2, 
-                                    activation='relu', kernel_initializer='glorot_uniform'))(x)
-        x = TimeDistributed(MaxPool2D())(x)
-
-        x = Dense(256, activation='relu', kernel_initializer='glorot_uniform')(x)
-        x = Dense(128, activation='relu', kernel_initializer='glorot_uniform')(x)
-        x = Dense(64, activation='relu', kernel_initializer='glorot_uniform')(x)
-
-        x = Flatten()(x)
-        state = x.numpy()
-
-        dist = np.linalg.norm(state[0, :]-state[1, :])
-        
-        # print(dist)
-        return dist
-
-    def sample(self, n):
-        if n < 1:
-            return None, None, None
-        
-        batch = np.zeros((n, ), dtype=np.ndarray)
-        ids = np.zeros(n, dtype=int)
-        for i in range(n):
-            id = np.random.randint(0, self.capacity)
-            while self.buffer.data[id][1] is None:
-                id = np.random.randint(0, self.capacity)
-            ids[i] = id
-            batch[i] = self.buffer.data[ids[i]][1]
-            priorities = None
-        return ids, batch, priorities
-
-    def add(self, sample, trace_id=None, pred_idx=None):
-        self.len = min(self.len + 1, self.capacity)
-        
-        sample = (trace_id, sample, pred_idx)
-        
-        if self.main_mem_is_full():
-            end = self.extract_trace(self.buffer.write)
-            self.move_to_sec(self.buffer.write, end)
-        
-        idx = self.add_sample(sample, self.buffer.write)
-        self.buffer.write = (self.buffer.write + 1) % self.main_capacity
-
-        return idx
-    
-    def add_sample(self, transition, write=None):
-        
-        _, idx = self.buffer.add(transition, write=write)
-
-        return idx
-
-    def get_data(self, include_indices=False):
-        all_data = list(np.arange(self.capacity)), list(self.buffer.data)
-        indices = []
-        data = []
-        for i, d in zip(all_data[0], all_data[1]):
-            if (d[1]) is not None:
-                indices.append(i)
-                data.append(d[1])
-            if include_indices:
-                return indices, data
-            else:
-                return data
-
-    def get(self, indices):
-
-        indices = np.array(indices, dtype=int)
-
-        return self.buffer.data[indices][:, 1]
-
-    def main_mem_is_full(self):
-        
-        return self.buffer.data[self.buffer.write][1] is not None
-    
-    def extract_trace(self, start):
-
-        trace_id = self.buffer.data[start][0]
-
-        end = (start+1) % self.main_capacity
-
-        if not self.trace_diversity:
-            return end
-        if trace_id is not None:
-            while self.buffer.data[end][0] == trace_id:
-                end = (end + 1) % self.main_capacity
-                if end == start:
-                    break
-        return end
-
-    def move_to_sec(self, start, end):
-        if end <= start:
-            indices = np.r_[start:self.main_capacity, 0:end]
-        else:
-            indices = np.r_[start:end]
-        
-        if not self.trace_diversity:
-            assert len(indices) == 1
-
-        trace = np.copy(self.buffer.data[indices])
-        write_indices = self.get_sec_write(self.secondary_traces, trace)
-
-        if write_indices is not None and len(write_indices) >= len(trace):
-            for i, (w, t) in enumerate(zip(write_indices, trace)):
-
-                self.buffer.data[w] = t
-                if i > 0:
-                    self.buffer.data[w][2] = write_indices[i - 1]
-            
-            if not self.trace_diversity:
-                assert len(trace) == 1
-            self.secondary_traces.append((trace, write_indices))
-        
-        self.remove_trace((None, indices))
-    
-    def remove_trace(self, trace):
-        _, trace_idx = trace
-        for i in trace_idx:
-            self.buffer.data[i] = (None, None, None)
-
-    def get_sec_write(self, secondary_traces, trace, reserved_idx=None):
-
-        if reserved_idx is None:
-            reserved_idx = []
-            
-        if len(trace) > self.sec_capacity:
-            return None
-            
-        if len(reserved_idx) >= len(trace):
-            return reserved_idx[:len(trace)]
-
-        # Find free spots in the secondary memory
-        # TODO: keep track of free spots so recomputation isn't necessary
-        free_spots = [
-            i + self.main_capacity for i in range(self.sec_capacity)
-            if (self.buffer.data[self.main_capacity + i][1]) is None
-        ]
-        
-        if len(free_spots) > len(reserved_idx):
-            return self.get_sec_write(secondary_traces, trace,
-                                      free_spots[:len(trace)])
-
-        # Get crowding distance of traces stored in the secondary buffer
-        idx_dist, _ = self.sec_distances(secondary_traces)
-
-        # Highest density = lowest distance
-        i, _ = min(idx_dist, key=lambda d: d[1])
-
-        _, trace_idx = secondary_traces[i]
-        reserved_idx += trace_idx
-
-        self.remove_trace(secondary_traces[i])
-
-        del secondary_traces[i]
-        return self.get_sec_write(secondary_traces, trace, reserved_idx)
-
-    def sec_distances(self, traces):
-        values = [self.get_trace_value(tr) for tr in traces]
-        if self.crowding_diversity:
-            distances = self.crowd_dist(values)
-        else:
-            distances = values
-        return [(i, d) for i, d in enumerate(distances)], values
-
-    def get_trace_value(self, trace_tuple):
-        trace, write_indices = trace_tuple
-        if not self.trace_diversity:
-            assert len(trace) == 1
-        trace_id = trace[0][0]
-        trace_data = [t[1] for t in trace]
-
-        return self.value_function(trace_data, trace_id, write_indices)
-    
-    def crowd_dist(self, datas):
-        points = np.array([Object() for _ in datas])
-        dimensions = len(datas[0])
-        for i, d in enumerate(datas):
-            points[i].data = d
-            points[i].i = i
-            points[i].distance = 0.
-
-        # Compute the distance between neighbors for each dimension and add it to
-        # each point's global distance
-        for d in range(dimensions):
-            points = sorted(points, key=lambda p: p.data[d])
-            spread = points[-1].data[d] - points[0].data[d]
-            for i, p in enumerate(points):
-                if i == 0 or i == len(points) - 1:
-                    p.distance += INF
-                else:
-                    p.distance += (
-                        points[i + 1].data[d] - points[i - 1].data[d]) / spread
-
-        # Sort points back to their original order
-        points = sorted(points, key=lambda p: p.i)
-        distances = np.array([p.distance for p in points])
-
-        return distances

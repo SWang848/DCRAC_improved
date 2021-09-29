@@ -192,8 +192,8 @@ class DCRACAgent:
         pred_idx = None
 
         self.current_state_raw = self.env.reset()
-        # self.current_state, last_action = self.history.reset_with_raw_frame(self.pixel_env.observation(self.current_state_raw), fill=self.fill_history)
-        self.current_state, last_action = self.history.reset_with_raw_frame(self.current_state_raw, fill=self.fill_history)
+        self.current_state, last_action = self.history.reset_with_raw_frame(self.pixel_env.observation(self.current_state_raw), fill=self.fill_history)
+        # self.current_state, last_action = self.history.reset_with_raw_frame(self.current_state_raw, fill=self.fill_history)
 
         for i in range(int(self.total_steps)):
 
@@ -205,8 +205,8 @@ class DCRACAgent:
 
             # perform the action
             next_state_raw, reward, terminal, info = self.env.step(action, self.frame_skip)
-            # next_state, next_last_action = self.history.add_raw_frame(self.pixel_env.observation(next_state_raw), action)
-            next_state, next_last_action = self.history.add_raw_frame(next_state_raw, action)
+            next_state, next_last_action = self.history.add_raw_frame(self.pixel_env.observation(next_state_raw), action)
+            # next_state, next_last_action = self.history.add_raw_frame(next_state_raw, action)
 
             if self.log_game_step:
                 print("Taking action", action, "under prob", acts_prob, "at", info["position"], "with reward", reward)
@@ -215,7 +215,7 @@ class DCRACAgent:
             pred_idx = self.memorize(
                 self.current_state,
                 self.current_state_raw,
-                action, 
+                action,
                 reward,
                 next_state,
                 terminal,
@@ -240,8 +240,8 @@ class DCRACAgent:
             
             if terminal or episode_steps > self.max_episode_length:
                 self.current_state_raw = self.env.reset()
-                # self.current_state, last_action = self.history.reset_with_raw_frame(self.pixel_env.observation(self.current_state_raw), fill=self.fill_history)
-                self.current_state, last_action = self.history.reset_with_raw_frame(self.current_state_raw, fill=self.fill_history)
+                self.current_state, last_action = self.history.reset_with_raw_frame(self.pixel_env.observation(self.current_state_raw), fill=self.fill_history)
+                # self.current_state, last_action = self.history.reset_with_raw_frame(self.current_state_raw, fill=self.fill_history)
                 pred_idx = None
 
                 is_weight_change = int(
@@ -394,7 +394,8 @@ class DCRACAgent:
     def policy_update(self, update_actor=True):
         np.random.seed(self.steps)
         # ids, batch, _ = self.buffer.sample(self.batch_size)
-        ids, batch, _ = self.buffer.sample(self.batch_size, self.k, self.steps, self.weights, self.current_state, self.current_state_raw, mode='properties')
+        # ids, batch, _ = self.buffer.sample(self.batch_size, self.k, self.steps, self.weights, self.current_state, self.current_state_raw, mode='properties')
+        ids, batch, _ = self.buffer.sample(self.batch_size, self.k, self.steps, self.weights, self.current_state)
 
         if self.direct_update:
             # Add recent experiences to the priority update batch
