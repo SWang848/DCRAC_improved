@@ -4,7 +4,7 @@ import numpy as np
 from optparse import OptionParser
 
 from deep_sea_treasure import DeepSeaTreasure
-from agent_dst import DCRACSAgent, DCRACAgent, DCRACSEAgent, DCRAC0Agent, CNAgent, CN0Agent
+from agentT_dst import DCRACSAgent, DCRACAgent, DCRACSEAgent, DCRAC0Agent, CNAgent, CN0Agent
 from utils import mkdir_p, get_weights_from_json
 from stats import rebuild_log, print_stats, compute_log
 
@@ -28,18 +28,18 @@ parser.add_option("--seed", dest="seed", default=0)
 parser.add_option("-a", "--agent", dest="agent", choices=["DCRAC", "DCRACS", "DCRACSE", "DCRAC0", "CN", "CN0"], default="DCRACS")
 parser.add_option("-n", "--net-type", dest="net_type", choices=["R", "M", "F"], default="R", help="Agent architecture type: Recurrent, MemNN or FC")
 parser.add_option("-r", "--replay", dest="replay", default="DER", choices=["STD", "DER"], help="Replay type, one of 'STD','DER'")
-parser.add_option("-s", "--buffer-size", dest="buffer_size", default="100000", help="Replay buffer size", type=int)
+parser.add_option("-s", "--buffer-size", dest="buffer_size", default="10000", help="Replay buffer size", type=int)
 parser.add_option("-m", "--memnn-size", dest="memnn_size", default="9", help="Memory network memory size", type=int)
 parser.add_option("-d", "--dup", dest="dup", action="store_false", default=True, help="Extra training")
 parser.add_option("-t", "--timesteps", dest="timesteps", default="10", help="Recurrent timesteps", type=int)
 parser.add_option("-e", "--end_e", dest="end_e", default="0.01", help="Final epsilon value", type=float)
-parser.add_option("-l", "--lr-c", dest="lr_c", default="0.02", help="Critic learning rate", type=float)
-parser.add_option("-L", "--lr-a", dest="lr_a", default="0.25", help="Actor learning rate", type=float)
+parser.add_option("-l", "--lr-c", dest="lr_c", default="0.001", help="Critic learning rate", type=float)
+parser.add_option("-L", "--lr-a", dest="lr_a", default="0.001", help="Actor learning rate", type=float)
 parser.add_option("--buffer-a", dest="buffer_a", default="2.", help="reply buffer error exponent", type=float)
 parser.add_option("--buffer-e", dest="buffer_e", default="0.01", help="reply buffer error offset", type=float)
-parser.add_option("-u", "--update-period", dest="updates", default="4", help="Update interval", type=int)
+parser.add_option("-u", "--update-period", dest="updates", default="1", help="Update interval", type=int)
 parser.add_option("-f", "--frame-skip", dest="frame_skip", default="4", help="Frame skip", type=int)
-parser.add_option("-b", "--batch-size", dest="batch_size", default="16", help="Sample batch size", type=int)
+parser.add_option("-b", "--batch-size", dest="batch_size", default="64", help="Sample batch size", type=int)
 parser.add_option("-g", "--discount", dest="discount", default="0.95", help="Discount factor", type=float)
 parser.add_option("--anneal-steps", dest="steps", default="10000", help="steps",  type=int)
 parser.add_option("-p", "--mode", dest="mode", choices=["regular", "sparse"], default="regular")
@@ -81,25 +81,27 @@ agent = deep_agent(env,
                    lr_2=options.lr_a,
                    frame_skip=options.frame_skip,
                    update_interval=options.updates,
+                   update_target_interval=1,
                    dup=options.dup,
                    action_conc=options.action_conc,
                    feature_embd=options.feature_embd,
+                   max_episode_length=1000,
+                   tau=0.0005,
+                #    clipnorm=80,
+                   clipvalue=0,
                    extra='{}_{}'.format(timestamp, hyper_info),
                    gpu_setting=options.gpu_setting)
 
 steps_per_weight = 5000 if options.mode == "sparse" else 1
 
 # log_file_name = 'output/logs/{}_dst{}_rewards_{}.log'.format(timestamp, options.dst_view, hyper_info)
-log_file_name = 'output/logs/rewards_P_9-regular-dst'
+log_file_name = 'output/logs/rewards_P_1-regular-dst'
 with open(log_file_name, 'w', 1) as log_file:
     agent.train(log_file, options.steps, all_weights, steps_per_weight, options.steps*10, log_game_step=options.log_game)
 
 # print stats
 length, step_rewards, step_regrets, step_nb_episode = rebuild_log(total=options.steps*10, log_file=log_file_name)
 print_stats(length, step_rewards, step_regrets, step_nb_episode, write_to_file=True, timestamp=timestamp)
-
-
-
 
 # # run test
 # with open('output/test1.log', 'w', 1) as test_log:

@@ -1,0 +1,1 @@
+python3 main_dst.py --seed 0 --agent DCRAC --replay DER --buffer-size 10000 --memnn-size 4 --timesteps 4 --lr-c 0.001 --lr-a 0.001 --update-period 1 --batch-size 64 --discount 0.95 --mode regular --gpu 1 

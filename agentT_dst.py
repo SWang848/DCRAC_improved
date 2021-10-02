@@ -19,7 +19,6 @@ from utils import *
 class DCRACAgent:
     def __init__(self,
                  env,
-                 pixel_env,
                  gamma=0.98,
                  weights=None,
                  timesteps=5,
@@ -48,15 +47,14 @@ class DCRACAgent:
                  momentum=0.9,
                  dup=False,
                  min_buf_size=0.1,
-                 tau=0.1,
+                 tau=0.0005,
                  action_conc=True,
                  feature_embd=True,
                  extra=None,
                  gpu_setting='1'):
         
         self.env = env
-        self.pixel_env = pixel_env
-        self.nb_action = self.env.action_space.n # .shape[0]
+        self.nb_action = self.env.action_space.shape[0]
         self.observation_shape = self.env.observation_space.shape
         self.nb_objective = self.env.obj_cnt
         self.discount = gamma
@@ -173,7 +171,7 @@ class DCRACAgent:
     # Train or run for some number of episodes.
     def train(self, log_file, learning_steps, weights, 
               per_weight_steps, total_steps, log_game_step=False):
-        
+
         self.learning_steps = learning_steps
         self.epsilon = self.start_e
         per_weight_steps = per_weight_steps
@@ -191,9 +189,8 @@ class DCRACAgent:
         episode_steps = 0
         pred_idx = None
 
-        self.current_state_raw = self.env.reset()
-        self.current_state, last_action = self.history.reset_with_raw_frame(self.pixel_env.observation(self.current_state_raw), fill=self.fill_history)
-        # self.current_state, last_action = self.history.reset_with_raw_frame(self.current_state_raw, fill=self.fill_history)
+        current_state_raw = self.env.reset()
+        self.current_state, last_action = self.history.reset_with_raw_frame(current_state_raw, fill=self.fill_history)
 
         for i in range(int(self.total_steps)):
 
@@ -205,8 +202,7 @@ class DCRACAgent:
 
             # perform the action
             next_state_raw, reward, terminal, info = self.env.step(action, self.frame_skip)
-            next_state, next_last_action = self.history.add_raw_frame(self.pixel_env.observation(next_state_raw), action)
-            # next_state, next_last_action = self.history.add_raw_frame(next_state_raw, action)
+            next_state, next_last_action = self.history.add_raw_frame(next_state_raw, action)
 
             if self.log_game_step:
                 print("Taking action", action, "under prob", acts_prob, "at", info["position"], "with reward", reward)
@@ -214,7 +210,6 @@ class DCRACAgent:
             # memorize the experienced transition
             pred_idx = self.memorize(
                 self.current_state,
-                self.current_state_raw,
                 action,
                 reward,
                 next_state,
@@ -235,13 +230,12 @@ class DCRACAgent:
                               self.epsilon, self.frame_skip, action)
 
             self.current_state = next_state
-            self.current_state_raw = next_state_raw
+            current_state_raw = next_state_raw
             last_action = next_last_action
             
             if terminal or episode_steps > self.max_episode_length:
-                self.current_state_raw = self.env.reset()
-                self.current_state, last_action = self.history.reset_with_raw_frame(self.pixel_env.observation(self.current_state_raw), fill=self.fill_history)
-                # self.current_state, last_action = self.history.reset_with_raw_frame(self.current_state_raw, fill=self.fill_history)
+                current_state_raw = self.env.reset()
+                self.current_state, last_action = self.history.reset_with_raw_frame(current_state_raw, fill=self.fill_history)
                 pred_idx = None
 
                 is_weight_change = int(
@@ -261,6 +255,7 @@ class DCRACAgent:
             if (i + 1) % 10000 == 0:
                 # self.save_weights()
                 self.save_model()
+
 
     # def test(self, weights, log_file, stoch_policy=None, log_game_step=False):
     #     episodes = 0
@@ -336,7 +331,7 @@ class DCRACAgent:
         """
         np.random.seed(self.steps)
         if egreedy and np.random.random() < self.epsilon:
-            return np.random.randint(self.env.action_space.n), (np.ones(self.nb_action)/self.nb_action)
+            return np.random.randint(self.env.action_space.shape[0]), (np.ones(self.nb_action)/self.nb_action)
 
         trace_a = self._get_onehot_action_trace(trace_a)
         weights = self.weights if weights is None else weights
@@ -393,9 +388,9 @@ class DCRACAgent:
 
     def policy_update(self, update_actor=True):
         np.random.seed(self.steps)
-        # ids, batch, _ = self.buffer.sample(self.batch_size)
+        ids, batch, _ = self.buffer.sample(self.batch_size)
         # ids, batch, _ = self.buffer.sample(self.batch_size, self.k, self.steps, self.weights, self.current_state, self.current_state_raw, mode='properties')
-        ids, batch, _ = self.buffer.sample(self.batch_size, self.k, self.steps, self.weights, self.current_state)
+        # ids, batch, _ = self.buffer.sample(self.batch_size, self.k, self.steps, self.weights, self.current_state)
 
         if self.direct_update:
             # Add recent experiences to the priority update batch
@@ -643,13 +638,13 @@ class DCRACAgent:
             self.trace_values[trace_id] = value
             return value
 
-        # self.buffer = MemoryBuffer(main_capacity=main_capacity, sec_capacity=sec_capacity,
-        #     value_function=der_trace_value, trace_diversity=True, a=self.buffer_a, e=self.buffer_e)
-
-        self.buffer = AttentiveMemoryBuffer(main_capacity=main_capacity, sec_capacity=sec_capacity,
+        self.buffer = MemoryBuffer(main_capacity=main_capacity, sec_capacity=sec_capacity,
             value_function=der_trace_value, trace_diversity=True, a=self.buffer_a, e=self.buffer_e)
 
-    def memorize(self, state, properties, action, reward, next_state, terminal, action_prev, acts_prob, 
+        # self.buffer = AttentiveMemoryBuffer(main_capacity=main_capacity, sec_capacity=sec_capacity,
+        #     value_function=der_trace_value, trace_diversity=True, a=self.buffer_a, e=self.buffer_e)
+
+    def memorize(self, state, action, reward, next_state, terminal, action_prev, acts_prob, 
         initial_error=0, trace_id=None, pred_idx=None):
         """Memorizes a transition into the replay, if no error is provided, the 
         transition is saved with the lowest priority possible, and should be
@@ -672,7 +667,7 @@ class DCRACAgent:
         if initial_error == 0 and not self.direct_update:
             initial_error = self.max_error
 
-        extra = np.array([self.weights, properties])
+        extra = np.array([self.weights])
         transition = np.array((state, action, reward, next_state[-1], terminal, action_prev, acts_prob, extra))
 
         # Add transition to replay buffer
@@ -698,10 +693,6 @@ class DCRACAgent:
         """
         self.critic.model.save("output/networks/{}_critic_model.h5".format(self.name))
         self.actor.model.save("output/networks/{}_actor_model.h5".format(self.name))
-
-    
-
-
 
 
 class DCRACSAgent(DCRACAgent):
@@ -766,7 +757,6 @@ class DCRACSAgent(DCRACAgent):
         """
         self.actorcritic.model.save("output/networks/{}_critic_model.h5".format(self.name))
 
-
 class DCRACSRunAgent(DCRACSAgent):
     def __init__(self, path, env, gamma=0.95, timesteps=10, max_episode_length=500,
                    im_size=(IM_SIZE, IM_SIZE), grayscale=BLACK_AND_WHITE, frame_skip=4, extra=None):
@@ -807,7 +797,6 @@ class DCRACSRunAgent(DCRACSAgent):
         # Make neural networks
         self.actorcritic = ActorCritic(load_from_model=True, model_path=path)
 
-
 class DCRACSEAgent(DCRACSAgent):
     def build_models(self):
         # Make only critic network (creates target model internally).
@@ -825,8 +814,6 @@ class DCRACSEAgent(DCRACSAgent):
     def train_on_batch(self, w_batch, o_batch, a_last_batch, q_true, action_objective, a_batch, p_old_batch, q_mask=None):
         action_objective = np.sum(action_objective, axis=1)
         self.actorcritic.trainable_model.train_on_batch([w_batch, o_batch, a_last_batch, action_objective, p_old_batch], [q_true, a_batch])
-
-
 
 class DCRAC0Agent(DCRACAgent):
     def build_models(self):
@@ -856,7 +843,6 @@ class DCRAC0Agent(DCRACAgent):
         dummy = q_true[:, 0, :]
         self.critic.trainable_model.train_on_batch([w_batch, o_batch, a_last_batch, q_true, q_mask], [dummy, q_true])
         self.actor.model.train_on_batch([w_batch, o_batch, a_last_batch], action_objective)
-
 
 class CNAgent(DCRACAgent):
     def build_models(self):
@@ -1010,7 +996,6 @@ class CNAgent(DCRACAgent):
         """
         self.critic.model.save("output/networks/{}_dqn_model.h5".format(self.name))
 
-
 class CNRunAgent(CNAgent):
     def __init__(self, path, env, gamma=0.95, timesteps=2, max_episode_length=500,
                    im_size=(IM_SIZE, IM_SIZE), grayscale=BLACK_AND_WHITE, frame_skip=4, extra=None):
@@ -1050,7 +1035,6 @@ class CNRunAgent(CNAgent):
 
         # Make neural networks
         self.critic = Critic(load_from_model=True, model_path=path)
-
 
 class CN0Agent(CNAgent):
     def build_models(self):
